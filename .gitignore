@@ -87,5 +87,6 @@ CTestTestfile.cmake
 
 # End of https://www.gitignore.io/api/clion
 
+build/
 data/
 .DS_Store
