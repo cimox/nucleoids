@@ -9,6 +9,7 @@ using namespace std;
 Mat imgOriginal, imgThreshold;
 Mat nucleusPositions;
 
+string filename = "../../data/5-6/005-Z_cut.tif";
 string originalWindow = "Original", thresholdWindow = "Threshold";
 string trackbarThresholdValue = "Threshold value", trackbarThresholdType = "Threshold type";
 int maxThresholdValue = 255, thresholdValue = 0,
@@ -20,7 +21,7 @@ void showNucleusPositions(Mat imgThreshold);
 void showNucleusContours(Mat imgOriginal, Mat imgThreshold, int thresholdValue);
 
 int main() {
-    imgOriginal = imread("../../data/17_cut.png", IMREAD_COLOR); // load image in grayscale
+    imgOriginal = imread(filename, IMREAD_COLOR); // load image in grayscale
 
     if (imgOriginal.empty()) {
         cout << "Could not open imgOriginal!" << std::endl;
@@ -42,8 +43,6 @@ int main() {
 
 void thresholdCallback(int, void*)
 {
-    imgOriginal = imread("../../data/17_cut.png", IMREAD_COLOR); // reload image in grayscale
-
     cout  << "threshold " << thresholdType << ", value: " << thresholdValue << endl;
     if (thresholdType == 8) {
         thresholdType = THRESH_BINARY | thresholdType;
@@ -67,7 +66,7 @@ void showNucleusPositions(Mat imgThreshold)
     cout << "Nucleus positions: " << nucleusPositions << endl;
 }
 
-double calculateMedian(vector<double> values)
+double calculateVectorMedian(vector<double> values)
 {
     double median;
     size_t size = values.size();
@@ -82,28 +81,56 @@ double calculateMedian(vector<double> values)
     return median;
 }
 
-vector<vector<Point>> filterContours(vector<vector<Point>> contours)
+double calculateVectorAverage(vector<double> values)
 {
-    double medianAreaSize = 0;
-    vector<double> contourAreas;
+    double average = 0;
 
+    for (int i = 0; i < values.size(); i++)
+    {
+        average += values[i];
+    }
+
+    return average/values.size();
+}
+
+vector<double> getContourAreas(vector<vector<Point>> contours)
+{
+    vector<double> contourAreas;
     for( int i = 0; i < contours.size(); i++ )
     {
         contourAreas.push_back(contourArea(contours[i]));
     }
-    medianAreaSize = calculateMedian(contourAreas);
+
+    return contourAreas;
+}
+
+void func ( void (*f)(int) );
+vector<vector<Point>> filterContours(vector<vector<Point>> contours, double (*metricFunction)(vector<double>) )
+{
+    vector<double> contourAreas = getContourAreas(contours);
+    double medianAreaSize = metricFunction(contourAreas);
+
     cout << "Median of contour area size " << medianAreaSize << endl;
 
-    cout << contours.size() << endl;
-    for ( int i = 0; i < contours.size(); i++)
+    if (contours.size() <= 1)
     {
-        contours.erase(contours.begin() + i);
-//        if (contourArea(contours[i]) <= 50000.0)
-//        {
-//            contours.erase(contours.begin() + i);
-//        }
+        return contours;
     }
-    cout << contours.size() << endl;
+
+    for ( long i = contours.size() - 1; i >= 0; i--)
+    {
+        if (contourArea(contours[i]) < medianAreaSize)
+        {
+            if (contours.size() == 1)
+            {
+                contours.erase(contours.begin());
+            }
+            else
+            {
+                contours.erase(contours.begin() + i);
+            }
+        }
+    }
 
     return contours;
 }
@@ -111,25 +138,23 @@ vector<vector<Point>> filterContours(vector<vector<Point>> contours)
 void showNucleusContours(Mat imgOriginal, Mat imgThreshold, int thresholdValue)
 {
     Mat canny_output;
+    Mat imgOriginalContours;
     vector<vector<Point> > contours;
     vector<Vec4i> hierarchy;
 
-    /// Detect edges using canny
+    imgOriginal.copyTo(imgOriginalContours);
     Canny( imgThreshold, canny_output, thresholdValue, thresholdValue*2, 3 );
-    /// Find contours
     findContours( canny_output, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) );
 
     cout << "Filtering " << contours.size() << " contours" << endl;
-    contours = filterContours(contours);
+    contours = filterContours(contours, calculateVectorAverage);
     cout << "Contours " << contours.size() << " left" << endl;
 
-    /// Draw contours
     for( int i = 0; i< contours.size(); i++ )
     {
-        drawContours( imgOriginal, contours, i, (255, 255, 255), 2, 8, hierarchy, 0, Point() );
+        drawContours( imgOriginalContours, contours, i, (255, 255, 255), 2, 8, hierarchy, 0, Point() );
     }
 
-    /// Show in a window
-    namedWindow( originalWindow, CV_WINDOW_AUTOSIZE );
-    imshow( originalWindow, imgOriginal );
+    namedWindow( "Contours", CV_WINDOW_AUTOSIZE );
+    imshow( "Contours", imgOriginalContours );
 }
