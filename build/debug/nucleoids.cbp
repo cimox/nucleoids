@@ -82,6 +82,18 @@
 				</MakeCommands>
 			</Target>
 		</Build>
+		<Unit filename="/Users/cimo/Documents/Development/nucleoids/src/common/utils.cpp">
+			<Option target="nucleoids"/>
+		</Unit>
+		<Unit filename="/Users/cimo/Documents/Development/nucleoids/src/common/utils.h">
+			<Option target="nucleoids"/>
+		</Unit>
+		<Unit filename="/Users/cimo/Documents/Development/nucleoids/src/core/draw.cpp">
+			<Option target="nucleoids"/>
+		</Unit>
+		<Unit filename="/Users/cimo/Documents/Development/nucleoids/src/core/draw.h">
+			<Option target="nucleoids"/>
+		</Unit>
 		<Unit filename="/Users/cimo/Documents/Development/nucleoids/src/main.cpp">
 			<Option target="nucleoids"/>
 		</Unit>

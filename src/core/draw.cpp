@@ -28,10 +28,21 @@ namespace Draw {
         contours = applyContourFilter(contours, filterType, filterMultiplier);
 
         for (int i = 0; i < contours.size(); i++) {
-            drawContours(imgOriginalContours, contours, i, (255, 255, 255), 2, 8, hierarchy, 0, Point());
+            drawContours(imgOriginalContours, contours, i, Scalar(255, 0, 0), 1, 8, hierarchy, 0, Point());
+
+            /// Get the moments
+            vector<Moments> mu(contours.size());
+            for (int k = 0; k < contours.size(); k++) { mu[k] = moments(contours[k], false); }
+
+            ///  Get the mass centers:
+            vector<Point2f> mc(contours.size());
+            for (int k = 0; k < contours.size(); k++) { mc[k] = Point2d(mu[k].m10 / mu[k].m00, mu[k].m01 / mu[k].m00); }
+
+            circle(imgOriginalContours, mc[i], 2, Scalar(0, 0, 255), -1, 8, 0);
         }
 
         namedWindow("Contours", CV_WINDOW_AUTOSIZE);
         imshow("Contours", imgOriginalContours);
+        moveWindow("Contours", imgOriginal.cols, 1);
     }
 }
