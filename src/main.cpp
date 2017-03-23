@@ -11,7 +11,7 @@ using namespace std;
 
 Mat imgOriginal, imgThreshold, imgEroded;
 
-string filename = "../../data/17_cut.png";
+string filename = "../../data/samples/10.tiff";
 string originalWindow = "Original", thresholdWindow = "Threshold";
 int maxThresholdValue = 255,
         thresholdValue = 0,
@@ -74,19 +74,17 @@ void findNucleus() {
     imshow("Blob", imgBlob);
 
 //    // Apply threshold and show image.
-//    threshold(imgBlurred, imgThreshold, thresholdValue, maxThresholdValue, THRESH_BINARY + THRESH_OTSU);
-////    adaptiveThreshold(imgBlurred, imgThreshold, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 13, 0.5);
-//    imshow(thresholdWindow, imgThreshold);
-//
-//    // Erosion + dilatation.
-//    Mat element = getStructuringElement(MORPH_ELLIPSE,
-//                                        Size(2 * erosion_size + 1, 2 * erosion_size + 1),
-//                                        Point(erosion_size, erosion_size));
-//    erode(imgThreshold, imgEroded, element);
-//    dilate(imgEroded, imgEroded, element);
-//    imshow("Erosion & dilatation", imgEroded);
+    threshold(imgBlurred, imgThreshold, thresholdValue, maxThresholdValue, THRESH_BINARY + THRESH_OTSU);
+//    adaptiveThreshold(imgBlurred, imgThreshold, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 13, 0.5);
+    imshow(thresholdWindow, imgThreshold);
 
-    // power-law transformacia
+    // Erosion + dilatation.
+    Mat element = getStructuringElement(MORPH_ELLIPSE,
+                                        Size(2 * erosion_size + 1, 2 * erosion_size + 1),
+                                        Point(erosion_size, erosion_size));
+    erode(imgThreshold, imgEroded, element);
+    dilate(imgEroded, imgEroded, element);
+    imshow("Erosion & dilatation", imgEroded);
 
     // do buduca: vymazat jadra buniek, power-law transformacia na zvyraznenie nukleoidov. detekcia nukleoidov a priradenie k centroidov
     // vyskusat Blob - nastavenie parametrov
