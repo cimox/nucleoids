@@ -9,29 +9,27 @@
 using namespace cv;
 using namespace std;
 
-Mat imgOriginal, imgThreshold, imgEroded;
+Mat imgOriginal, imgThreshold, imgEroded, imgBlob;
 
-string filename = "../../data/samples/10.tiff";
-string originalWindow = "Original", thresholdWindow = "Threshold";
-int maxThresholdValue = 255,
-        thresholdValue = 0,
-        thresholdType = 8;
-double filterMultiplier = 0;
-int erosion_size = 11;
+string FILENAME = "../../data/samples/14.tiff";
+int MAX_THRESHOLD = 255, THRESHOLD = 0, THRESHOLD_TYPE = 8;
+double FILTER_MULTIPLIER = 0;
+int EROSION_SIZE = 11;
 
 void findNucleus();
-
+void closingAndContours();
 
 int main() {
-    imgOriginal = imread(filename, IMREAD_COLOR); // load image in grayscale
+    string originalWindow = "Original", thresholdWindow = "Threshold";
+    imgOriginal = imread(FILENAME, IMREAD_COLOR); // load image in grayscale
 
     if (imgOriginal.empty()) {
         cout << "Could not open imgOriginal!" << std::endl;
         return -1;
     }
 
-    if (thresholdType == 8) {
-        thresholdType = THRESH_BINARY | thresholdType;
+    if (THRESHOLD_TYPE == 8) {
+        THRESHOLD_TYPE = THRESH_BINARY | THRESHOLD_TYPE;
     }
 
     // Window with original image.
@@ -57,38 +55,41 @@ void findNucleus() {
 
     // Blob detection
     SimpleBlobDetector::Params params;
-    params.minDistBetweenBlobs = 25.0f;
-    params.filterByInertia = true;
+    params.minDistBetweenBlobs = 50.0f;
+    params.filterByInertia = false;
     params.filterByConvexity = false;
     params.filterByColor = false;
     params.filterByCircularity = false;
     params.filterByArea = true;
     params.minArea = 250.0f;
-//    params.maxArea = 1500.0f;
     Ptr<SimpleBlobDetector> d = SimpleBlobDetector::create(params);
     vector<KeyPoint> keypoints;
-    d->detect(imgBlurred, keypoints);
 
-    Mat imgBlob;
-    drawKeypoints(imgBlurred, keypoints, imgBlob, Scalar(0, 0, 255), DrawMatchesFlags::DEFAULT);
+    // Apply threshold and show image.
+    threshold(imgBlurred, imgThreshold, THRESHOLD, MAX_THRESHOLD, THRESH_BINARY + THRESH_OTSU);
+
+    // Blob detection.
+    d->detect(imgOriginal, keypoints);
+    drawKeypoints(imgOriginal, keypoints, imgBlob, Scalar(0, 0, 255), DrawMatchesFlags::DEFAULT);
     imshow("Blob", imgBlob);
+    moveWindow("Blob", imgOriginal.cols, 5);
 
-//    // Apply threshold and show image.
-    threshold(imgBlurred, imgThreshold, thresholdValue, maxThresholdValue, THRESH_BINARY + THRESH_OTSU);
-//    adaptiveThreshold(imgBlurred, imgThreshold, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 13, 0.5);
-    imshow(thresholdWindow, imgThreshold);
 
+    // do buduca: vymazat jadra buniek,                         TODO
+    // power-law transformacia na zvyraznenie nukleoidov.       TODO
+    // detekcia nukleoidov a priradenie k centroidov            TODO
+    // vyskusat Blob - nastavenie parametrov                    DONE
+}
+
+void closingAndContours() {
     // Erosion + dilatation.
     Mat element = getStructuringElement(MORPH_ELLIPSE,
-                                        Size(2 * erosion_size + 1, 2 * erosion_size + 1),
-                                        Point(erosion_size, erosion_size));
+                                        Size(2 * EROSION_SIZE + 1, 2 * EROSION_SIZE + 1),
+                                        Point(EROSION_SIZE, EROSION_SIZE));
     erode(imgThreshold, imgEroded, element);
     dilate(imgEroded, imgEroded, element);
     imshow("Erosion & dilatation", imgEroded);
 
-    // do buduca: vymazat jadra buniek, power-law transformacia na zvyraznenie nukleoidov. detekcia nukleoidov a priradenie k centroidov
-    // vyskusat Blob - nastavenie parametrov
-
     // Find and draw contours of threshold's image.
-    Draw::drawAndFilterContours(imgOriginal, imgEroded, thresholdValue, Utils::AVERAGE, filterMultiplier);
+    Draw::drawAndFilterContours(imgOriginal, imgEroded, THRESHOLD, Utils::AVERAGE, FILTER_MULTIPLIER);
 }
