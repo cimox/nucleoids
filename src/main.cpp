@@ -1,13 +1,15 @@
-#include <iostream>
-#include <opencv2/core.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv/cv.hpp>
+#include "iostream"
+#include "opencv2/core.hpp"
+#include "opencv2/highgui.hpp"
+#include "opencv2/imgproc.hpp"
+#include "opencv/cv.hpp"
+#include "opencv2/xfeatures2d.hpp"
 #include "core/draw.h"
 #include "common/utils.h"
 
 using namespace cv;
 using namespace std;
+using namespace xfeatures2d;
 
 Mat imgOriginal, imgThreshold, imgEroded, imgBlob;
 
@@ -18,6 +20,7 @@ int EROSION_SIZE = 11;
 
 void findNucleus();
 void closingAndContours();
+vector<KeyPoint> simpleBlobDetection(Mat img);
 
 int main() {
     string originalWindow = "Original", thresholdWindow = "Threshold";
@@ -47,38 +50,37 @@ int main() {
 void findNucleus() {
     Mat imgOriginalGrey, imgBlurred;
 
-    // Convert to greyscale.
+    // Preprocess image.
     cvtColor(imgOriginal, imgOriginalGrey, COLOR_BGR2GRAY);
-
-    // Apply gaussian blur.
     GaussianBlur(imgOriginalGrey, imgBlurred, Size(11, 11), 0);
-
-    // Blob detection
-    SimpleBlobDetector::Params params;
-    params.minDistBetweenBlobs = 50.0f;
-    params.filterByInertia = false;
-    params.filterByConvexity = false;
-    params.filterByColor = false;
-    params.filterByCircularity = false;
-    params.filterByArea = true;
-    params.minArea = 250.0f;
-    Ptr<SimpleBlobDetector> d = SimpleBlobDetector::create(params);
-    vector<KeyPoint> keypoints;
-
-    // Apply threshold and show image.
     threshold(imgBlurred, imgThreshold, THRESHOLD, MAX_THRESHOLD, THRESH_BINARY + THRESH_OTSU);
 
-    // Blob detection.
-    d->detect(imgOriginal, keypoints);
-    drawKeypoints(imgOriginal, keypoints, imgBlob, Scalar(0, 0, 255), DrawMatchesFlags::DEFAULT);
-    imshow("Blob", imgBlob);
-    moveWindow("Blob", imgOriginal.cols, 5);
-
+    // vyskusat Blob - nastavenie parametrov                    DONE
+//    simpleBlobDetection(imgOriginal);
+//    simpleBlobDetection(imgThreshold);
 
     // do buduca: vymazat jadra buniek,                         TODO
+    Mat nucleusMask = Mat(imgOriginal.size(), imgOriginal.type());
+//    nucleusMask = Scalar(255, 255, 255);
+
+    vector<KeyPoint> keypoints = simpleBlobDetection(imgOriginal);
+    for (int i = 0; i < keypoints.size(); i++) {
+        Point2f kp = keypoints[i].pt;
+        double kpSize = keypoints[i].size;
+
+        circle(nucleusMask, kp, int(kpSize)/3, Scalar(0, 0, 0), CV_FILLED);
+        Rect region(int(kp.x), int(kp.y), int(kpSize)/3, int(kpSize)/3);
+        GaussianBlur(nucleusMask(region), nucleusMask(region), Size(7, 7), 0);
+    }
+//    GaussianBlur(nucleusMask, nucleusMask, Size(11, 11), 0);
+    imshow("Nucleus mask", nucleusMask);
+
+//    Mat result;
+//    imgOriginal.copyTo(result, nucleusMask);
+//    imshow("Mask applied", result);
+
     // power-law transformacia na zvyraznenie nukleoidov.       TODO
     // detekcia nukleoidov a priradenie k centroidov            TODO
-    // vyskusat Blob - nastavenie parametrov                    DONE
 }
 
 void closingAndContours() {
@@ -92,4 +94,31 @@ void closingAndContours() {
 
     // Find and draw contours of threshold's image.
     Draw::drawAndFilterContours(imgOriginal, imgEroded, THRESHOLD, Utils::AVERAGE, FILTER_MULTIPLIER);
+}
+
+vector<KeyPoint> simpleBlobDetection(Mat img) {
+    SimpleBlobDetector::Params params;
+    params.minDistBetweenBlobs = 50.0f;
+
+    params.filterByInertia = true;
+    params.minInertiaRatio = 0.5;
+
+    params.filterByConvexity = false;
+    params.filterByColor = false;
+
+    params.filterByCircularity = true;
+    params.minCircularity = 0.1;
+
+    params.filterByArea = true;
+    params.minArea = 250.0f;
+    Ptr<SimpleBlobDetector> d = SimpleBlobDetector::create(params);
+    vector<KeyPoint> keypoints;
+
+    // Blob detection
+    d->detect(img, keypoints);
+    drawKeypoints(img, keypoints, imgBlob, Scalar(0, 0, 255), DrawMatchesFlags::DEFAULT);
+    imshow("Blob", imgBlob);
+    moveWindow("Blob", img.cols, 5);
+
+    return keypoints;
 }
