@@ -14,7 +14,7 @@ using namespace Utils;
 
 namespace Draw {
 
-    void drawAndFilterContours(cv::Mat imgOriginal, cv::Mat imgThreshold, int thresholdValue, int filterType,
+    cv::Mat drawAndFilterContours(cv::Mat imgOriginal, cv::Mat imgThreshold, int thresholdValue, int filterType,
                                double filterMultiplier) {
         Mat canny_output;
         Mat imgOriginalContours;
@@ -45,5 +45,7 @@ namespace Draw {
         namedWindow("Contours", CV_WINDOW_AUTOSIZE);
         imshow("Contours", imgOriginalContours);
         moveWindow("Contours", imgOriginal.cols, 1);
+
+        return imgOriginalContours;
     }
 }

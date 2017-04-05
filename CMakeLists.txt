@@ -4,7 +4,7 @@ project(nucleoids)
 set(CMAKE_CXX_STANDARD 14)
 
 find_package( OpenCV REQUIRED core xfeatures2d )
-set(SOURCE_FILES src/main.cpp src/common/utils.cpp src/common/utils.h src/core/draw.h src/core/draw.cpp)
+set(SOURCE_FILES src/main.cpp src/common/utils.cpp src/common/utils.h src/core/draw.h src/core/draw.cpp src/core/operations.h src/core/operations.cpp)
 add_executable(nucleoids ${SOURCE_FILES})
 
 include_directories(${OpenCV_INCLUDE_DIRS})

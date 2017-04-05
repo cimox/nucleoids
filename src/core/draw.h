@@ -10,7 +10,7 @@
 
 namespace Draw {
 
-    void drawAndFilterContours(cv::Mat imgOriginal, cv::Mat imgThreshold, int thresholdValue, int filterType = 0,
+    cv::Mat drawAndFilterContours(cv::Mat imgOriginal, cv::Mat imgThreshold, int thresholdValue, int filterType = 0,
                                double filterMultiplier = 1);
 }
 

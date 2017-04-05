@@ -51,7 +51,8 @@ namespace Utils {
         return contourAreas;
     }
 
-    vector<vector<Point>> filterContours(vector<vector<Point>> contours, double (*metricFunction)(vector<double>), double multiplier) {
+    vector<vector<Point>>
+    filterContours(vector<vector<Point>> contours, double (*metricFunction)(vector<double>), double multiplier) {
         vector<double> contourAreas = getContourAreas(contours);
         vector<vector<Point>> filteredContours;
         double minAreaSize = metricFunction(contourAreas);
