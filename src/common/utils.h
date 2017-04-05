@@ -30,6 +30,7 @@ namespace Utils {
     std::vector<std::vector<cv::Point>>
     applyContourFilter(std::vector<std::vector<cv::Point> > contours, int filterType, double filterMultiplier);
 
+
 }
 
 

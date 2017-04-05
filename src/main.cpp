@@ -1,37 +1,41 @@
-#include <iostream>
-#include <opencv2/core.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv/cv.hpp>
+#include "iostream"
+#include "opencv2/core.hpp"
+#include "opencv2/highgui.hpp"
+#include "opencv2/imgproc.hpp"
+#include "opencv/cv.hpp"
+//#include "opencv2/xfeatures2d.hpp"
 #include "core/draw.h"
 #include "common/utils.h"
 
 using namespace cv;
 using namespace std;
+//using namespace xfeatures2d;
 
-Mat imgOriginal, imgThreshold, imgEroded;
+Mat imgOriginal, imgThreshold, imgEroded, imgBlob;
 
-string filename = "../../data/17_cut.png";
-string originalWindow = "Original", thresholdWindow = "Threshold";
-int maxThresholdValue = 255,
-        thresholdValue = 0,
-        thresholdType = 8;
-double filterMultiplier = 0;
-int erosion_size = 11;
+string FILENAME = "../../data/17_cut.png";
+int MAX_THRESHOLD = 255, THRESHOLD = 0, THRESHOLD_TYPE = 8;
+double FILTER_MULTIPLIER = 0;
+int EROSION_SIZE = 11;
 
 void findNucleus();
 
+void closingAndContours();
+
+vector<KeyPoint> simpleBlobDetection(Mat img);
+void gammaCorrection(Mat &src, Mat &dst, float fGamma);
 
 int main() {
-    imgOriginal = imread(filename, IMREAD_COLOR); // load image in grayscale
+    string originalWindow = "Original", thresholdWindow = "Threshold";
+    imgOriginal = imread(FILENAME, IMREAD_COLOR); // load image in grayscale
 
     if (imgOriginal.empty()) {
         cout << "Could not open imgOriginal!" << std::endl;
         return -1;
     }
 
-    if (thresholdType == 8) {
-        thresholdType = THRESH_BINARY | thresholdType;
+    if (THRESHOLD_TYPE == 8) {
+        THRESHOLD_TYPE = THRESH_BINARY | THRESHOLD_TYPE;
     }
 
     // Window with original image.
@@ -49,48 +53,116 @@ int main() {
 void findNucleus() {
     Mat imgOriginalGrey, imgBlurred;
 
-    // Convert to greyscale.
+    // Preprocess image.
     cvtColor(imgOriginal, imgOriginalGrey, COLOR_BGR2GRAY);
-
-    // Apply gaussian blur.
     GaussianBlur(imgOriginalGrey, imgBlurred, Size(11, 11), 0);
+    threshold(imgBlurred, imgThreshold, THRESHOLD, MAX_THRESHOLD, THRESH_BINARY + THRESH_OTSU);
 
-    // Blob detection
-    SimpleBlobDetector::Params params;
-    params.minDistBetweenBlobs = 25.0f;
-    params.filterByInertia = true;
-    params.filterByConvexity = false;
-    params.filterByColor = false;
-    params.filterByCircularity = false;
-    params.filterByArea = true;
-    params.minArea = 250.0f;
-//    params.maxArea = 1500.0f;
-    Ptr<SimpleBlobDetector> d = SimpleBlobDetector::create(params);
-    vector<KeyPoint> keypoints;
-    d->detect(imgBlurred, keypoints);
+    // vyskusat Blob - nastavenie parametrov                    DONE
+    simpleBlobDetection(imgOriginal);
+    simpleBlobDetection(imgThreshold);
 
-    Mat imgBlob;
-    drawKeypoints(imgBlurred, keypoints, imgBlob, Scalar(0, 0, 255), DrawMatchesFlags::DEFAULT);
-    imshow("Blob", imgBlob);
+    // do buduca: vymazat jadra buniek,                         DONE
+    Mat imgWithoutNucleus = Mat(imgOriginal.size(), imgOriginal.type());
+    imgWithoutNucleus = imgOriginal.clone();
 
-//    // Apply threshold and show image.
-//    threshold(imgBlurred, imgThreshold, thresholdValue, maxThresholdValue, THRESH_BINARY + THRESH_OTSU);
-////    adaptiveThreshold(imgBlurred, imgThreshold, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 13, 0.5);
-//    imshow(thresholdWindow, imgThreshold);
-//
-//    // Erosion + dilatation.
-//    Mat element = getStructuringElement(MORPH_ELLIPSE,
-//                                        Size(2 * erosion_size + 1, 2 * erosion_size + 1),
-//                                        Point(erosion_size, erosion_size));
-//    erode(imgThreshold, imgEroded, element);
-//    dilate(imgEroded, imgEroded, element);
-//    imshow("Erosion & dilatation", imgEroded);
+    vector<KeyPoint> keypoints = simpleBlobDetection(imgOriginal);
+    for (int i = 0; i < keypoints.size(); i++) {
+        Point2f kp = keypoints[i].pt;
+        double kpSize = keypoints[i].size;
 
-    // power-law transformacia
+        circle(imgWithoutNucleus, kp, int(kpSize) / 2, Scalar(0, 0, 0), CV_FILLED);
+    }
+    imshow("Nucleus mask", imgWithoutNucleus);
+    imgWithoutNucleus = Draw::drawAndFilterContours(imgWithoutNucleus, imgWithoutNucleus, 255, Utils::AVERAGE, 0);
 
-    // do buduca: vymazat jadra buniek, power-law transformacia na zvyraznenie nukleoidov. detekcia nukleoidov a priradenie k centroidov
-    // vyskusat Blob - nastavenie parametrov
+    // power-law transformacia na zvyraznenie nukleoidov.       DONE
+    Mat imgGamma;
+    gammaCorrection(imgWithoutNucleus, imgGamma, 0.65);
+    imshow("Gamma", imgGamma);
+
+    // detekcia nukleoidov a priradenie k centroidov            TODO
+
+    // Sharpen img.
+    Mat imgSharpened;
+    Laplacian(imgWithoutNucleus, imgSharpened, CV_8UC1);
+    imshow("Sharpened", imgSharpened);
+
+//    filter2D(imgWithoutNucleus, imgSharpened, -1 , kernel, Point( -1, -1 ), 0, BORDER_DEFAULT );
+//    cv::GaussianBlur(frame, image, cv::Size(0, 0), 11);
+//    cv::addWeighted(frame, 1.5, image, -0.5, 0, image);*/
+}
+
+void closingAndContours() {
+    // Erosion + dilatation.
+    Mat element = getStructuringElement(MORPH_ELLIPSE,
+                                        Size(2 * EROSION_SIZE + 1, 2 * EROSION_SIZE + 1),
+                                        Point(EROSION_SIZE, EROSION_SIZE));
+    erode(imgThreshold, imgEroded, element);
+    dilate(imgEroded, imgEroded, element);
+    imshow("Erosion & dilatation", imgEroded);
 
     // Find and draw contours of threshold's image.
-    Draw::drawAndFilterContours(imgOriginal, imgEroded, thresholdValue, Utils::AVERAGE, filterMultiplier);
+    Draw::drawAndFilterContours(imgOriginal, imgEroded, THRESHOLD, Utils::AVERAGE, FILTER_MULTIPLIER);
+}
+
+/*
+ * 1. threshold na odburanie zvyskov z original obrazku
+ * 2. Potom power-law transformacia
+ * 3. Distance transform
+ */
+
+void gammaCorrection(Mat &src, Mat &dst, float fGamma) {
+    unsigned char lut[256];
+
+    for (int i = 0; i < 256; i++) {
+        lut[i] = saturate_cast<uchar>(pow((float) (i / 255.0), fGamma) * 255.0f);
+    }
+
+    dst = src.clone();
+    const int channels = dst.channels();
+    switch (channels) {
+        case 1: {
+            MatIterator_<uchar> it, end;
+            for (it = dst.begin<uchar>(), end = dst.end<uchar>(); it != end; it++)
+                *it = lut[(*it)];
+            break;
+        }
+        case 3: {
+            MatIterator_<Vec3b> it, end;
+            for (it = dst.begin<Vec3b>(), end = dst.end<Vec3b>(); it != end; it++) {
+                (*it)[0] = lut[((*it)[0])];
+                (*it)[1] = lut[((*it)[1])];
+                (*it)[2] = lut[((*it)[2])];
+            }
+            break;
+        }
+    }
+}
+
+vector<KeyPoint> simpleBlobDetection(Mat img) {
+    SimpleBlobDetector::Params params;
+    params.minDistBetweenBlobs = 50.0f;
+
+    params.filterByInertia = true;
+    params.minInertiaRatio = 0.5;
+
+    params.filterByConvexity = false;
+    params.filterByColor = false;
+
+    params.filterByCircularity = true;
+    params.minCircularity = 0.1;
+
+    params.filterByArea = true;
+    params.minArea = 250.0f;
+    Ptr<SimpleBlobDetector> d = SimpleBlobDetector::create(params);
+    vector<KeyPoint> keypoints;
+
+    // Blob detection
+    d->detect(img, keypoints);
+    drawKeypoints(img, keypoints, imgBlob, Scalar(0, 0, 255), DrawMatchesFlags::DEFAULT);
+    imshow("Blob", imgBlob);
+    moveWindow("Blob", img.cols, 5);
+
+    return keypoints;
 }
