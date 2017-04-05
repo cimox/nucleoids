@@ -11,10 +11,15 @@ namespace Operations {
 
     int MAX_THRESHOLD = 255, THRESHOLD = 0;
 
-    void preprocessImage(cv::Mat &imgSrc, cv::Mat &imgDst) {
-        cv::cvtColor(imgSrc, imgSrc, cv::COLOR_BGR2GRAY);
-        cv::GaussianBlur(imgSrc, imgSrc, cv::Size(11, 11), 0);
-        cv::threshold(imgSrc, imgDst, THRESHOLD, MAX_THRESHOLD, cv::THRESH_BINARY + cv::THRESH_OTSU);
+    void preprocessImage(cv::Mat &imgSrc, cv::Mat &imgDst, bool showImg) {
+        cv::Mat imgTmp;
+        cv::cvtColor(imgSrc, imgTmp, cv::COLOR_BGR2GRAY);
+        cv::GaussianBlur(imgTmp, imgTmp, cv::Size(11, 11), 0);
+        cv::threshold(imgTmp, imgDst, THRESHOLD, MAX_THRESHOLD, cv::THRESH_BINARY + cv::THRESH_OTSU);
+
+        if (showImg) {
+            imshow("Preprocessed", imgDst);
+        }
     }
 
     void morphClosing(cv::Mat &imgSrc, cv::Mat &imgDst, int erosion_size, bool showImg) {
@@ -29,7 +34,7 @@ namespace Operations {
         }
     }
 
-    void gammaCorrection(cv::Mat &imgSrc, cv::Mat &imgDst, float fGamma) {
+    void gammaCorrection(cv::Mat &imgSrc, cv::Mat &imgDst, float fGamma, bool showImg) {
         unsigned char lut[256];
 
         for (int i = 0; i < 256; i++) {
@@ -55,6 +60,10 @@ namespace Operations {
                 break;
             }
             default: break;
+        }
+
+        if (showImg) {
+            imshow("Gamma corrected", imgDst);
         }
     }
 

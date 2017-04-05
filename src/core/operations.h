@@ -9,11 +9,11 @@
 
 namespace Operations {
 
-    void preprocessImage(cv::Mat &imgSrc, cv::Mat &imgDst);
+    void preprocessImage(cv::Mat &imgSrc, cv::Mat &imgDst, bool showImg = false);
 
-    void morphClosing(cv::Mat &imgSrc, cv::Mat &imgDst, int erosion_size, bool showImg);
+    void morphClosing(cv::Mat &imgSrc, cv::Mat &imgDst, int erosion_size, bool showImg = false);
 
-    void gammaCorrection(cv::Mat &imgSrc, cv::Mat &imgDst, float fGamma);
+    void gammaCorrection(cv::Mat &imgSrc, cv::Mat &imgDst, float fGamma, bool showImg = false);
 
     std::vector<cv::KeyPoint> simpleBlobDetection(cv::Mat &imgSrc, cv::Mat &imgDst, bool showImg = false);
 }

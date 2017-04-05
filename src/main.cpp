@@ -10,10 +10,36 @@
 using namespace cv;
 using namespace std;
 
-Mat imgOriginal, imgPreprocessed;
+Mat imgOriginal, imgPreprocessed, imgPlaceholder;
 string FILENAME = "../../data/samples/14.tiff";
 
-void findNucleus();
+void removeNucleus(cv::Mat &imgSrc, cv::Mat &imgDst, bool showImg = false);
+
+void blob(cv::Mat &imgSrc, cv::Mat &imgDst) {
+    cv::SimpleBlobDetector::Params params;
+//    params.minDistBetweenBlobs = 50.0f;
+
+    params.filterByInertia = true;
+    params.minInertiaRatio = 0.5;
+
+    params.filterByConvexity = false;
+    params.filterByColor = false;
+
+    params.filterByCircularity = false;
+//    params.minCircularity = 0.1;
+
+    params.filterByArea = true;
+    params.minArea = 5.0f;
+    params.maxArea = 500.0f;
+    cv::Ptr<cv::SimpleBlobDetector> d = cv::SimpleBlobDetector::create(params);
+    std::vector<cv::KeyPoint> keypoints;
+
+    // Blob detection
+    d->detect(imgSrc, keypoints);
+    drawKeypoints(imgSrc, keypoints, imgDst, cv::Scalar(0, 0, 255), cv::DrawMatchesFlags::DEFAULT);
+
+    imshow("Blob", imgDst);
+}
 
 int main() {
     string originalWindow = "Original", thresholdWindow = "Threshold";
@@ -28,34 +54,55 @@ int main() {
     namedWindow(originalWindow, WINDOW_AUTOSIZE);
     imshow(originalWindow, imgOriginal);
 
-    // Preprocess image.
-    Operations::preprocessImage(imgOriginal, imgPreprocessed);
-    imshow("Preprocessed", imgPreprocessed);
+//    bitwise_not(imgOriginal, imgOriginal);
+//    cv::GaussianBlur(imgOriginal, imgPlaceholder, cv::Size(0, 0), 3);
+//    cv::addWeighted(imgOriginal, 1.5, imgPlaceholder, -0.5, 1, imgPlaceholder);
+//    bitwise_not(imgPlaceholder, imgPlaceholder);
+//    Operations::gammaCorrection(imgPlaceholder, imgPlaceholder, 0.65);
+//    imshow("Laplac", imgPlaceholder);
+//    Mat tmp;
+//    blob(imgPlaceholder, tmp);
 
-    // Find nucleus.
-    findNucleus();
+    // Preprocess image.
+//    Operations::preprocessImage(imgOriginal, imgPreprocessed);
+
+    // removeNucleus nucleus.
+    Mat tmp;
+    Operations::gammaCorrection(imgOriginal, imgPlaceholder, 6.5, true);
+    bitwise_not(imgPlaceholder, imgPlaceholder);
+    cv::cvtColor(imgPlaceholder, imgPlaceholder, cv::COLOR_BGR2GRAY);
+    threshold(imgPlaceholder, imgPlaceholder, 0, 255, cv::THRESH_BINARY + cv::THRESH_OTSU);
+    imshow("bitwise", imgPlaceholder);
+    imgOriginal.copyTo(imgOriginal, imgPlaceholder);
+    imshow("test", imgOriginal);
+
+//    removeNucleus(imgOriginal, imgPlaceholder, true);
 
     waitKey(0);
     return 0;
 }
 
-void findNucleus() {
-    Mat imgOriginalGrey, imgBlurred, imgPlaceholder;
+void removeNucleus(cv::Mat &imgSrc, cv::Mat &imgDst, bool showImg) {
+    Mat imgTmp;
 
-    Operations::simpleBlobDetection(imgPreprocessed, imgPlaceholder, true);
+    // TODO: this a debug blob print
+    Operations::simpleBlobDetection(imgSrc, imgTmp, true);
 
-    // do buduca: vymazat jadra buniek,                         DONE
-    Mat imgWithoutNucleus = Mat(imgOriginal.size(), imgOriginal.type());
-    imgWithoutNucleus = imgOriginal.clone();
+    // Clone original image.
+    Mat imgWithoutNucleus = Mat(imgSrc.size(), imgSrc.type());
+    imgWithoutNucleus = imgSrc.clone();
 
-    vector<KeyPoint> keypoints = Operations::simpleBlobDetection(imgOriginal, imgPlaceholder);
+    vector<KeyPoint> keypoints = Operations::simpleBlobDetection(imgSrc, imgTmp);
     for (int i = 0; i < keypoints.size(); i++) {
         Point2f kp = keypoints[i].pt;
         double kpSize = keypoints[i].size;
-        circle(imgWithoutNucleus, kp, int(kpSize) / 2, Scalar(0, 0, 0), CV_FILLED);
+        circle(imgWithoutNucleus, kp, int(kpSize) / 3, Scalar(0, 0, 0), CV_FILLED);
     }
-    imshow("Nucleus mask", imgWithoutNucleus);
-    imgWithoutNucleus = Draw::drawAndFilterContours(imgWithoutNucleus, imgWithoutNucleus, 255, Utils::AVERAGE, 0);
+
+    imgDst = imgWithoutNucleus.clone();
+    if (showImg) {
+        imshow("Nucleus mask", imgDst);
+    }
 }
 
 /* TODO: w8
