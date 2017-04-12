@@ -12,6 +12,7 @@ using namespace std;
 
 Mat imgOriginal, imgPreprocessed, imgPlaceholder;
 string FILENAME = "../../data/samples/14.tiff";
+int GAMMA_VALUE = 10;
 
 void removeNucleus(cv::Mat &imgSrc, cv::Mat &imgDst, bool showImg = false);
 
@@ -54,27 +55,23 @@ int main() {
     namedWindow(originalWindow, WINDOW_AUTOSIZE);
     imshow(originalWindow, imgOriginal);
 
-//    bitwise_not(imgOriginal, imgOriginal);
-//    cv::GaussianBlur(imgOriginal, imgPlaceholder, cv::Size(0, 0), 3);
-//    cv::addWeighted(imgOriginal, 1.5, imgPlaceholder, -0.5, 1, imgPlaceholder);
-//    bitwise_not(imgPlaceholder, imgPlaceholder);
-//    Operations::gammaCorrection(imgPlaceholder, imgPlaceholder, 0.65);
-//    imshow("Laplac", imgPlaceholder);
-//    Mat tmp;
-//    blob(imgPlaceholder, tmp);
+    // Prepare gamma mask
+    Mat imgGammaMask;
+    Operations::gammaCorrection(imgOriginal, imgGammaMask, GAMMA_VALUE, true);
+    Operations::preprocessImage(imgGammaMask, imgGammaMask, true);
+    int erosion_size = 4;
+    cv::Mat element = cv::getStructuringElement(
+            cv::MORPH_ELLIPSE,
+            cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1),
+            cv::Point(erosion_size, erosion_size)
+    );
+    dilate(imgGammaMask, imgGammaMask, element);
+    imshow("Threshold", imgGammaMask);
 
-    // Preprocess image.
-//    Operations::preprocessImage(imgOriginal, imgPreprocessed);
-
-    // removeNucleus nucleus.
-    Mat tmp;
-    Operations::gammaCorrection(imgOriginal, imgPlaceholder, 6.5, true);
-    bitwise_not(imgPlaceholder, imgPlaceholder);
-    cv::cvtColor(imgPlaceholder, imgPlaceholder, cv::COLOR_BGR2GRAY);
-    threshold(imgPlaceholder, imgPlaceholder, 0, 255, cv::THRESH_BINARY + cv::THRESH_OTSU);
-    imshow("bitwise", imgPlaceholder);
-    imgOriginal.copyTo(imgOriginal, imgPlaceholder);
-    imshow("test", imgOriginal);
+    // Subtract gamma mask from original image
+    cv::cvtColor(imgOriginal, imgOriginal, cv::COLOR_BGR2GRAY);
+    subtract(imgOriginal, imgGammaMask, imgPlaceholder);
+    imshow("Subtract", imgPlaceholder);
 
 //    removeNucleus(imgOriginal, imgPlaceholder, true);
 
@@ -104,9 +101,3 @@ void removeNucleus(cv::Mat &imgSrc, cv::Mat &imgDst, bool showImg) {
         imshow("Nucleus mask", imgDst);
     }
 }
-
-/* TODO: w8
- * 1. threshold na odburanie zvyskov z original obrazku
- * 2. Potom power-law transformacia
- * 3. Distance transform -- vyriesi deliace sa bunky
- */
