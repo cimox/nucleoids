@@ -29,17 +29,17 @@ namespace Draw {
 
         int cx, cy;
         for (int i = 0; i < contours.size(); i++) {
-            drawContours(imgOriginalContours, contours, i, Scalar(255, 0, 0), 1, LINE_8, hierarchy, 0, Point());
-
-            // Get the moments.
-            vector<Moments> mu(contours.size());
-            for (int k = 0; k < contours.size(); k++) { mu[k] = moments(contours[k], false); }
-
-            // Get the mass centers.
-            vector<Point2f> mc(contours.size());
-            for (int k = 0; k < contours.size(); k++) { mc[k] = Point2d(mu[k].m10 / mu[k].m00, mu[k].m01 / mu[k].m00); }
-
-            circle(imgOriginalContours, mc[i], 1, Scalar(0, 0, 255), 8, 0);
+            drawContours(imgOriginalContours, contours, i, Scalar(0, 0, 0), 5, LINE_8, hierarchy, 0, Point());
+//
+//            // Get the moments.
+//            vector<Moments> mu(contours.size());
+//            for (int k = 0; k < contours.size(); k++) { mu[k] = moments(contours[k], false); }
+//
+//            // Get the mass centers.
+//            vector<Point2f> mc(contours.size());
+//            for (int k = 0; k < contours.size(); k++) { mc[k] = Point2d(mu[k].m10 / mu[k].m00, mu[k].m01 / mu[k].m00); }
+//
+//            circle(imgOriginalContours, mc[i], 1, Scalar(0, 0, 255), 8, 0);
         }
 
         namedWindow("Contours", CV_WINDOW_AUTOSIZE);
