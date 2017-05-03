@@ -14,7 +14,7 @@ using namespace std;
 Mat imgOriginal, imgPlaceholder, imgSubtracted, imgBinarized;
 
 // Filenames
-string FILENAME = "../../data/samples/10.tiff";
+string FILENAME = "../../data/samples/31_mid-brightness.tiff";
 string WRITE_FILENAME = "../../data/results/tmp.png";
 
 // Constants
@@ -32,7 +32,7 @@ void removeNucleus(cv::Mat &imgSrc, cv::Mat &imgDst, bool showImg = false);
 
 void findNucleoids(int, void *);
 
-std::vector<cv::KeyPoint> findNucleoidBlobs(cv::Mat &imgSrc, cv::Mat imgDstSource, cv::Mat &imgDst) {
+std::vector<cv::KeyPoint> findNucleoidBlobs(cv::Mat &imgSrc, cv::Mat imgDstSource, cv::Mat &imgDst, bool showImg) {
     cv::SimpleBlobDetector::Params params;
 
     params.minDistBetweenBlobs = 10.0f;
@@ -53,19 +53,19 @@ std::vector<cv::KeyPoint> findNucleoidBlobs(cv::Mat &imgSrc, cv::Mat imgDstSourc
 
     // Blob detection
     d->detect(imgSrc, keypoints);
-
     drawKeypoints(imgDstSource, keypoints, imgDst, cv::Scalar(0, 0, 255), cv::DrawMatchesFlags::DEFAULT);
 
-    string label = to_string(keypoints.size()) + " nucleoids found";
-    putText(imgDst, label, cv::Point(50, 50), cv::QT_FONT_NORMAL, 2.0, CV_RGB(0, 204, 0), 2);
+    if (showImg) {
+        string label = to_string(keypoints.size()) + " nucleoids found";
+        putText(imgDst, label, cv::Point(50, 50), cv::QT_FONT_NORMAL, 2.0, CV_RGB(0, 204, 0), 2);
 
-    imwrite(WRITE_FILENAME, imgDst);
+        Mat imgTmp;
+        if (imgDst.rows / 2 > 1024 || imgDst.cols / 2 > 800) {
+            resize(imgDst, imgTmp, Size(imgDst.rows / 2, imgDst.cols / 2));
+        }
 
-    if (imgDst.rows / 2 > 1024 || imgDst.cols / 2 > 800) {
-        resize(imgDst, imgDst, Size(imgDst.rows / 2, imgDst.cols / 2));
+        imshow("Nucleoids", imgTmp);
     }
-
-    imshow("Nucleoids", imgDst);
 
     return keypoints;
 }
@@ -205,27 +205,41 @@ void findNucleoids(int, void *) {
     medianBlur(imgDTResult, imgDTResult, 1);
     if (DEBUG) {
         imshow("DT of binarized imgWithNucleoidsAreas", imgDTResult);
-        findNucleoidBlobs(imgDTResult, imgDTResult, imgPlaceholder);
+        findNucleoidBlobs(imgDTResult, imgDTResult, imgPlaceholder, true);
     }
 
-    nucleoidsPositions = findNucleoidBlobs(imgDTResult, imgOriginal,imgPlaceholder);
+    nucleoidsPositions = findNucleoidBlobs(imgDTResult, imgOriginal, imgPlaceholder, false);
 
     // Assign nucleoids to nuclei -- TODO: extract this part to separate function
-    for (vector<KeyPoint>::iterator nucleoid = nucleoidsPositions.begin(); nucleoid != nucleoidsPositions.end(); ) {
+    unsigned int nucleoidsWithNucleusCount = 0;
+    for (vector<KeyPoint>::iterator nucleoid = nucleoidsPositions.begin(); nucleoid != nucleoidsPositions.end();) {
         double shortestLine = DBL_MAX;
-        Point bestNucleusCenter;
+        Point bestNucleusCenter = Point(-1, -1);
 
         for (auto nucleus : nucleiPositions) {
-            if (pow((nucleoid->pt.x - nucleus.pt.x), 2) + pow((nucleoid->pt.y - nucleus.pt.y), 2) < pow(nucleus.size * 1.5, 2)) {
+            if (pow((nucleoid->pt.x - nucleus.pt.x), 2) + pow((nucleoid->pt.y - nucleus.pt.y), 2) <
+                pow(nucleus.size * 1.5, 2)) {
                 if (norm(nucleus.pt - nucleoid->pt) < shortestLine) {
                     bestNucleusCenter = nucleus.pt;
+                    shortestLine = norm(nucleus.pt - nucleoid->pt);
                 }
             }
         }
 
-        line(imgPlaceholder, bestNucleusCenter, nucleoid->pt, Scalar(0, 255, 0), 1);
+        if (bestNucleusCenter.x != -1 && bestNucleusCenter.y != -1) {
+            line(imgPlaceholder, bestNucleusCenter, nucleoid->pt, Scalar(0, 255, 0), 1);
+            nucleoidsWithNucleusCount++;
+        }
         ++nucleoid;
     }
+
+    string label = to_string(nucleoidsWithNucleusCount) + " nucleoids found";
+    putText(imgPlaceholder, label, cv::Point(imgPlaceholder.cols / 2, 50), cv::QT_FONT_NORMAL, 1.0,
+            CV_RGB(0, 204, 0), 1);
+    if (imgPlaceholder.rows / 2 > 1024 || imgPlaceholder.cols / 2 > 800) {
+        resize(imgPlaceholder, imgPlaceholder, Size(imgPlaceholder.rows / 2, imgPlaceholder.cols / 2));
+    }
+    imwrite(WRITE_FILENAME, imgPlaceholder);
 
     imshow("Result", imgPlaceholder);
 }
