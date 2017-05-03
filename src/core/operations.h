@@ -15,7 +15,11 @@ namespace Operations {
 
     void gammaCorrection(cv::Mat &imgSrc, cv::Mat &imgDst, float fGamma, bool showImg = false);
 
-    std::vector<cv::KeyPoint> simpleBlobDetection(cv::Mat &imgSrc, cv::Mat &imgDst, bool showImg = false);
+    std::vector<cv::KeyPoint>
+    simpleBlobDetection(cv::Mat &imgSrc, cv::Mat &imgDst, std::string windowName, bool showImg = false);
+
+    std::vector<cv::KeyPoint>
+    countNucleus(cv::Mat &imgSrc, cv::Mat &imgDst, std::string windowName, bool showImg = false);
 }
 
 

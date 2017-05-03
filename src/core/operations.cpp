@@ -25,8 +25,8 @@ namespace Operations {
     void morphClosing(cv::Mat &imgSrc, cv::Mat &imgDst, int erosion_size, bool showImg) {
         // Erosion + dilatation.
         cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE,
-                                            cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1),
-                                            cv::Point(erosion_size, erosion_size));
+                                                    cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1),
+                                                    cv::Point(erosion_size, erosion_size));
         erode(imgSrc, imgDst, element);
         dilate(imgDst, imgDst, element);
         if (showImg) {
@@ -59,7 +59,8 @@ namespace Operations {
                 }
                 break;
             }
-            default: break;
+            default:
+                break;
         }
 
         if (showImg) {
@@ -67,33 +68,56 @@ namespace Operations {
         }
     }
 
-    std::vector<cv::KeyPoint> simpleBlobDetection(cv::Mat &imgSrc, cv::Mat &imgDst, bool showImg) {
+    std::vector<cv::KeyPoint>
+    simpleBlobDetection(cv::Mat &imgSrc, cv::Mat &imgDst, std::string windowName, bool showImg = false) {
         cv::SimpleBlobDetector::Params params;
-        params.minDistBetweenBlobs = 50.0f;
 
         params.filterByInertia = true;
-        params.minInertiaRatio = 0.5;
+        params.minInertiaRatio = 0.05;
+        params.maxInertiaRatio = 1;
 
         params.filterByConvexity = false;
-        params.filterByColor = false;
-
-        params.filterByCircularity = true;
-        params.minCircularity = 0.1;
+        params.filterByColor = true;
+        params.blobColor = 255;
 
         params.filterByArea = true;
-        params.minArea = 250.0f;
+        params.minArea = 50.0f;
+
         cv::Ptr<cv::SimpleBlobDetector> d = cv::SimpleBlobDetector::create(params);
         std::vector<cv::KeyPoint> keypoints;
 
         // Blob detection
         d->detect(imgSrc, keypoints);
-        drawKeypoints(imgSrc, keypoints, imgDst, cv::Scalar(0, 0, 255), cv::DrawMatchesFlags::DEFAULT);
+        drawKeypoints(imgDst, keypoints, imgDst, cv::Scalar(255, 0, 0), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
 
         if (showImg) {
-            imshow("Blob", imgDst);
+            imshow(windowName, imgDst);
         }
 
         return keypoints;
     }
 
+    std::vector<cv::KeyPoint> countNucleus(cv::Mat &imgSrc, cv::Mat &imgDst, std::string windowName, bool showImg = false) {
+        cv::Mat imgSrcCopy = imgSrc.clone();
+        cv::Mat imgDstCopy = imgDst.clone();
+        std::vector<cv::KeyPoint> nucleus = simpleBlobDetection(imgSrcCopy, imgDstCopy, windowName, false);
+
+        if (showImg) { // write nucleus count to image
+            std::string label; ;
+            if (nucleus.size() == 1) {
+                label = std::to_string(nucleus.size()) + " cell nucleus found";
+            }
+            else {
+                label = std::to_string(nucleus.size()) + " cell nuclei found";
+            }
+
+            cv::putText(imgDstCopy, label, cv::Point(50, 50), cv::QT_FONT_NORMAL, 2.0, CV_RGB(0,204,0), 2.5);
+            if (imgDstCopy.rows/2 > 1024 || imgDstCopy.cols/2 > 800) {
+                resize(imgDstCopy, imgDstCopy, cv::Size(imgDstCopy.rows/2, imgDstCopy.cols/2));
+            }
+            imshow(windowName, imgDstCopy);
+        }
+
+        return nucleus;
+    }
 }

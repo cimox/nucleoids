@@ -10,20 +10,32 @@
 using namespace cv;
 using namespace std;
 
-Mat imgOriginal, imgPreprocessed, imgPlaceholder, imgSubtracted, imgBinarized;
-string FILENAME = "../../data/samples/31.tiff";
-int GAMMA_VALUE = 10;
-int thresholdValue = 0, thresholdBlockSize = 5, thresholdC = 0;
-int medianSize = 5, elementSize = 3;
-bool blurGammaMask = false, showAllImages = false;
+// Image matrices
+Mat imgOriginal, imgPlaceholder, imgSubtracted, imgBinarized;
+
+// Filenames
+string FILENAME = "../../data/samples/10.tiff";
+string WRITE_FILENAME = "../../data/results/tmp.png";
+
+// Constants
+int GAMMA_VALUE = 10, ADAPTIVE_MAX_THRESHOLD_VALUE = 255, ADAPTIVE_THRESHOLD_BLOCK_SIZE = 5, ADAPTIVE_THRESHOLD_C = 0,
+        MEDIAN_SIZE = 7, STRUCT_ELEM_SIZE = 7, SUBTRACT_ELEM_SIZE = 3;
+
+// Nucleoids positions keypoints from blob detection
+std::vector<cv::KeyPoint> nucleoidsPositions, nucleiPositions;
+
+// Debug variables
+bool DEBUG = false, SHOW_ORIGINAL = false;
+
 
 void removeNucleus(cv::Mat &imgSrc, cv::Mat &imgDst, bool showImg = false);
 
-void updateThreshold(int, void *);
+void findNucleoids(int, void *);
 
-void blob(cv::Mat &imgSrc, cv::Mat &imgDst) {
+std::vector<cv::KeyPoint> findNucleoidBlobs(cv::Mat &imgSrc, cv::Mat imgDstSource, cv::Mat &imgDst) {
     cv::SimpleBlobDetector::Params params;
-//    params.minDistBetweenBlobs = 50.0f;
+
+    params.minDistBetweenBlobs = 10.0f;
 
     params.filterByInertia = true;
     params.minInertiaRatio = 0.05;
@@ -33,21 +45,29 @@ void blob(cv::Mat &imgSrc, cv::Mat &imgDst) {
     params.filterByColor = true;
     params.blobColor = 255;
 
-//    params.filterByCircularity = true;
-//    params.minCircularity = 0.1;
-
     params.filterByArea = true;
-    params.minArea = 0.5f;
-//    params.maxArea = 500.0f;
+    params.minArea = 0.01f;
 
     cv::Ptr<cv::SimpleBlobDetector> d = cv::SimpleBlobDetector::create(params);
     std::vector<cv::KeyPoint> keypoints;
 
     // Blob detection
     d->detect(imgSrc, keypoints);
-    drawKeypoints(imgOriginal, keypoints, imgDst, cv::Scalar(0, 0, 255), cv::DrawMatchesFlags::DEFAULT);
 
-    imshow("Blob", imgDst);
+    drawKeypoints(imgDstSource, keypoints, imgDst, cv::Scalar(0, 0, 255), cv::DrawMatchesFlags::DEFAULT);
+
+    string label = to_string(keypoints.size()) + " nucleoids found";
+    putText(imgDst, label, cv::Point(50, 50), cv::QT_FONT_NORMAL, 2.0, CV_RGB(0, 204, 0), 2);
+
+    imwrite(WRITE_FILENAME, imgDst);
+
+    if (imgDst.rows / 2 > 1024 || imgDst.cols / 2 > 800) {
+        resize(imgDst, imgDst, Size(imgDst.rows / 2, imgDst.cols / 2));
+    }
+
+    imshow("Nucleoids", imgDst);
+
+    return keypoints;
 }
 
 int main() {
@@ -61,7 +81,7 @@ int main() {
 
     // Window with original image.
     namedWindow(originalWindow, WINDOW_AUTOSIZE);
-    imshow(originalWindow, imgOriginal);
+    if (DEBUG || SHOW_ORIGINAL) imshow(originalWindow, imgOriginal);
 
     // Prepare gamma mask
     Mat imgGammaMask;
@@ -69,50 +89,45 @@ int main() {
     Operations::preprocessImage(imgGammaMask, imgGammaMask, false);
     cv::Mat element = cv::getStructuringElement(
             cv::MORPH_ELLIPSE,
-            cv::Size(2 * elementSize + 1, 2 * elementSize + 1),
-            cv::Point(elementSize, elementSize)
+            cv::Size(2 * SUBTRACT_ELEM_SIZE + 1, 2 * SUBTRACT_ELEM_SIZE + 1),
+            cv::Point(SUBTRACT_ELEM_SIZE, SUBTRACT_ELEM_SIZE)
     );
-    if (blurGammaMask) {
-        dilate(imgGammaMask, imgGammaMask, element);
-        cv::GaussianBlur(imgGammaMask, imgGammaMask, cv::Size(13, 13), 0);
-        if (showAllImages) imshow("Threshold", imgGammaMask);
-    }
+    dilate(imgGammaMask, imgGammaMask, element);
+    if (DEBUG) imshow("Threshold", imgGammaMask);
+
+    // Count cell nuclei
+    nucleiPositions = Operations::countNucleus(imgGammaMask, imgOriginal, "Cell nuclei count", true);
 
     // Subtract gamma mask from original image
     cv::cvtColor(imgOriginal, imgOriginal, cv::COLOR_BGR2GRAY);
     subtract(imgOriginal, imgGammaMask, imgSubtracted);
-    if (showAllImages) imshow("Subtracted", imgSubtracted);
+    if (DEBUG) imshow("Subtracted", imgSubtracted);
 
-    // Image binarization
-    namedWindow("Binarized");
-    createTrackbar("Threshold value", "Binarized", &thresholdValue, 255, updateThreshold);
-    createTrackbar("Threshold Block size", "Binarized", &thresholdBlockSize, 255, updateThreshold);
-    createTrackbar("Threshold C", "Binarized", &thresholdC, 255, updateThreshold);
-    createTrackbar("Median size", "Binarized", &medianSize, 10, updateThreshold);
-    createTrackbar("Element size", "Binarized", &elementSize, 20, updateThreshold);
+    // Nucleoids segmentation -- core
+    if (DEBUG) {
+        namedWindow("Trackbars");
+        createTrackbar("Threshold value", "Trackbars", &ADAPTIVE_MAX_THRESHOLD_VALUE, 255, findNucleoids);
+        createTrackbar("Threshold Block size", "Trackbars", &ADAPTIVE_THRESHOLD_BLOCK_SIZE, 255, findNucleoids);
+        createTrackbar("Threshold C", "Trackbars", &ADAPTIVE_THRESHOLD_C, 255, findNucleoids);
+        createTrackbar("Median size", "Trackbars", &MEDIAN_SIZE, 10, findNucleoids);
+        createTrackbar("Element size", "Trackbars", &STRUCT_ELEM_SIZE, 20, findNucleoids);
+    }
 
-    updateThreshold(0, 0);
+    findNucleoids(0, 0);
 
     waitKey(0);
     return 0;
 }
 
-void updateThreshold(int, void *) {
+
+Mat getImageWithNucleoidsAreas() {
     cv::Mat element;
-    if (thresholdBlockSize % 2 != 1) thresholdBlockSize -= 1;
-    if (thresholdBlockSize <= 5) thresholdBlockSize = 5;
-    if (medianSize % 2 == 0 || medianSize < 1) medianSize++;
-    if (elementSize % 2 == 0 || elementSize < 1) elementSize++;
-
-    if (showAllImages) {
-        cout << "threshold block size: " << thresholdBlockSize << ", thresholdC: " << thresholdC << endl;
-    }
-
     // Apply adaptive threshold to original image without nucleus
-    adaptiveThreshold(imgSubtracted, imgBinarized, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY,
-                      thresholdBlockSize, thresholdC);
-    medianBlur(imgBinarized, imgBinarized, medianSize);
-    if (showAllImages) imshow("Binarized - DT computed from this pic", imgBinarized);
+    adaptiveThreshold(imgSubtracted, imgBinarized, ADAPTIVE_MAX_THRESHOLD_VALUE, CV_ADAPTIVE_THRESH_MEAN_C,
+                      CV_THRESH_BINARY,
+                      ADAPTIVE_THRESHOLD_BLOCK_SIZE, ADAPTIVE_THRESHOLD_C);
+    medianBlur(imgBinarized, imgBinarized, MEDIAN_SIZE);
+    if (DEBUG) imshow("1. Binarized subtracted image (adaptive threshold + median blur)", imgBinarized);
 
     // Perform the distance transform algorithm
     Mat imgDistanceTransform = Mat(imgOriginal.size(), imgOriginal.type());
@@ -123,53 +138,109 @@ void updateThreshold(int, void *) {
     double min, max;
     minMaxLoc(imgDistanceTransform, &min, &max);
     if (min != max) {
-        imgDistanceTransform.convertTo(imgDistanceTransform, CV_8U, 255.0/(max-min), -255.0*min/(max-min));
+        imgDistanceTransform.convertTo(imgDistanceTransform, CV_8U, 255.0 / (max - min), -255.0 * min / (max - min));
     }
-    else {
-        // TODO
+    medianBlur(imgDistanceTransform, imgDistanceTransform, MEDIAN_SIZE);
+    if (DEBUG) {
+        imshow("2. DT of binarized image (DT, normalization, median blur)", imgDistanceTransform);
+        moveWindow("2. DT of binarized image (DT, normalization, median blur)", imgOriginal.cols, 1);
     }
-    imshow("Distance Transform Image", imgDistanceTransform);
-    moveWindow("Distance Transform Image", imgOriginal.cols, 1);
 
     Mat imgDistanceTransformMask;
     threshold(imgDistanceTransform, imgDistanceTransformMask, 40, 255, CV_THRESH_BINARY_INV);
     element = cv::getStructuringElement(
             cv::MORPH_ELLIPSE,
-            cv::Size(elementSize + 1, elementSize + 1),
-            cv::Point(elementSize, elementSize)
+            cv::Size(STRUCT_ELEM_SIZE + 1, STRUCT_ELEM_SIZE + 1),
+            cv::Point(STRUCT_ELEM_SIZE, STRUCT_ELEM_SIZE)
     );
-    if (showAllImages) imshow("Binarized DT", imgDistanceTransformMask);
-
     erode(imgDistanceTransformMask, imgDistanceTransformMask, element);
-    imshow("Inverted binary DT + erosion", imgDistanceTransformMask);
-    moveWindow("Inverted binary DT + erosion", imgOriginal.cols, imgOriginal.rows + 1);
+    if (DEBUG) imshow("3. Inverted DT image (binary inv threshold + erosion)", imgDistanceTransformMask);
 
     // Subtract DT binary inverted mask from original image
-    Mat result = Mat(imgOriginal.size(), imgOriginal.type());
-    subtract(imgOriginal, imgDistanceTransformMask, result);
-    imshow("result", result);
+    Mat imgWithNucleoidsAreas = Mat(imgOriginal.size(), imgOriginal.type());
+    subtract(imgOriginal, imgDistanceTransformMask, imgWithNucleoidsAreas);
+    if (DEBUG) imshow("4. Original - inverted eroded mask", imgWithNucleoidsAreas);
 
-    blob(result, imgPlaceholder);
+    return imgWithNucleoidsAreas;
 }
 
+void clampVariables() {
+    if (ADAPTIVE_THRESHOLD_BLOCK_SIZE % 2 != 1) ADAPTIVE_THRESHOLD_BLOCK_SIZE -= 1;
+    if (ADAPTIVE_THRESHOLD_BLOCK_SIZE <= 5) ADAPTIVE_THRESHOLD_BLOCK_SIZE = 5;
+    if (MEDIAN_SIZE % 2 == 0 || MEDIAN_SIZE < 1) MEDIAN_SIZE++;
+    if (STRUCT_ELEM_SIZE % 2 == 0 || STRUCT_ELEM_SIZE < 1) STRUCT_ELEM_SIZE++;
+}
 
-/* TODO: Do buduceho cvika
- * 1. spocitat pocet jadier
- * 2. aplikovat DT masku na povodny obrazok a spocitat nukleoidy
- * 3. CNN vyskusat
- */
+void findNucleoids(int, void *) {
+    cv::Mat element;
+
+    clampVariables();
+
+    if (DEBUG) {
+        cout << "elem: " << STRUCT_ELEM_SIZE << ", median: " << MEDIAN_SIZE << endl;
+        cout << "threshold block size: " << ADAPTIVE_THRESHOLD_BLOCK_SIZE << ", ADAPTIVE_THRESHOLD_C: "
+             << ADAPTIVE_THRESHOLD_C << endl;
+    }
+
+    Mat imgWithNucleoidsAreas = getImageWithNucleoidsAreas();
+
+    // DT of original image where only areas with nucleoids are kept
+    Mat imgResultThreshold;
+    adaptiveThreshold(imgWithNucleoidsAreas, imgResultThreshold, ADAPTIVE_MAX_THRESHOLD_VALUE,
+                      CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY,
+                      ADAPTIVE_THRESHOLD_BLOCK_SIZE, ADAPTIVE_THRESHOLD_C);
+    if (DEBUG) imshow("Result threshold", imgResultThreshold);
+
+    // Apply DT on binarized imgWithNucleoidsAreas
+    Mat imgDTResult = Mat(imgOriginal.size(), imgOriginal.type());
+    distanceTransform(imgResultThreshold, imgDTResult, CV_DIST_L2, DIST_MASK_PRECISE);
+    normalize(imgDTResult, imgDTResult, 0, 1., NORM_MINMAX);
+
+    // Properly convert distance transform image
+    double min, max;
+    minMaxLoc(imgDTResult, &min, &max);
+    if (min != max) {
+        imgDTResult.convertTo(imgDTResult, CV_8U, 255.0 / (max - min), -255.0 * min / (max - min));
+    }
+    medianBlur(imgDTResult, imgDTResult, 1);
+    if (DEBUG) {
+        imshow("DT of binarized imgWithNucleoidsAreas", imgDTResult);
+        findNucleoidBlobs(imgDTResult, imgDTResult, imgPlaceholder);
+    }
+
+    nucleoidsPositions = findNucleoidBlobs(imgDTResult, imgOriginal,imgPlaceholder);
+
+    // Assign nucleoids to nuclei -- TODO: extract this part to separate function
+    for (vector<KeyPoint>::iterator nucleoid = nucleoidsPositions.begin(); nucleoid != nucleoidsPositions.end(); ) {
+        double shortestLine = DBL_MAX;
+        Point bestNucleusCenter;
+
+        for (auto nucleus : nucleiPositions) {
+            if (pow((nucleoid->pt.x - nucleus.pt.x), 2) + pow((nucleoid->pt.y - nucleus.pt.y), 2) < pow(nucleus.size * 1.5, 2)) {
+                if (norm(nucleus.pt - nucleoid->pt) < shortestLine) {
+                    bestNucleusCenter = nucleus.pt;
+                }
+            }
+        }
+
+        line(imgPlaceholder, bestNucleusCenter, nucleoid->pt, Scalar(0, 255, 0), 1);
+        ++nucleoid;
+    }
+
+    imshow("Result", imgPlaceholder);
+}
 
 void removeNucleus(cv::Mat &imgSrc, cv::Mat &imgDst, bool showImg) {
     Mat imgTmp;
 
     // TODO: this a debug blob print
-    Operations::simpleBlobDetection(imgSrc, imgTmp, true);
+    Operations::simpleBlobDetection(imgSrc, imgTmp, "Remove nucleus - blob", true);
 
     // Clone original image.
     Mat imgWithoutNucleus = Mat(imgSrc.size(), imgSrc.type());
     imgWithoutNucleus = imgSrc.clone();
 
-    vector<KeyPoint> keypoints = Operations::simpleBlobDetection(imgSrc, imgTmp);
+    vector<KeyPoint> keypoints = Operations::simpleBlobDetection(imgSrc, imgTmp, "Removed nucleus");
     for (int i = 0; i < keypoints.size(); i++) {
         Point2f kp = keypoints[i].pt;
         double kpSize = keypoints[i].size;
