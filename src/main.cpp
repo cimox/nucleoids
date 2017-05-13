@@ -11,21 +11,21 @@ using namespace cv;
 using namespace std;
 
 // Image matrices
-Mat imgOriginal, imgPlaceholder, imgSubtracted, imgBinarized;
+Mat imgOriginal, imgOriginalClone, imgPlaceholder, imgSubtracted, imgBinarized;
 
 // Filenames
-string FILENAME = "../../data/samples/31_mid-brightness.tiff";
+string FILENAME = "../../data/samples/10.png";
 string WRITE_FILENAME = "../../data/results/tmp.png";
 
 // Constants
 int GAMMA_VALUE = 10, ADAPTIVE_MAX_THRESHOLD_VALUE = 255, ADAPTIVE_THRESHOLD_BLOCK_SIZE = 5, ADAPTIVE_THRESHOLD_C = 0,
-        MEDIAN_SIZE = 7, STRUCT_ELEM_SIZE = 7, SUBTRACT_ELEM_SIZE = 3;
+        MEDIAN_SIZE = 9, STRUCT_ELEM_SIZE = 11, SUBTRACT_ELEM_SIZE = 3;
 
 // Nucleoids positions keypoints from blob detection
 std::vector<cv::KeyPoint> nucleoidsPositions, nucleiPositions;
 
 // Debug variables
-bool DEBUG = false, SHOW_ORIGINAL = false;
+bool DEBUG = true, SHOW_ORIGINAL = false;
 
 
 void removeNucleus(cv::Mat &imgSrc, cv::Mat &imgDst, bool showImg = false);
@@ -61,10 +61,11 @@ std::vector<cv::KeyPoint> findNucleoidBlobs(cv::Mat &imgSrc, cv::Mat imgDstSourc
 
         Mat imgTmp;
         if (imgDst.rows / 2 > 1024 || imgDst.cols / 2 > 800) {
+            // Resize big picture for screen
             resize(imgDst, imgTmp, Size(imgDst.rows / 2, imgDst.cols / 2));
         }
 
-        imshow("Nucleoids", imgTmp);
+        imshow("Nucleoids", imgDst);
     }
 
     return keypoints;
@@ -81,18 +82,15 @@ int main() {
 
     // Window with original image.
     namedWindow(originalWindow, WINDOW_AUTOSIZE);
+    imgOriginalClone = imgOriginal.clone();
     if (DEBUG || SHOW_ORIGINAL) imshow(originalWindow, imgOriginal);
+//    Operations::gammaCorrection(imgOriginal, imgOriginal, 3.5, false);
 
     // Prepare gamma mask
     Mat imgGammaMask;
     Operations::gammaCorrection(imgOriginal, imgGammaMask, GAMMA_VALUE, false);
     Operations::preprocessImage(imgGammaMask, imgGammaMask, false);
-    cv::Mat element = cv::getStructuringElement(
-            cv::MORPH_ELLIPSE,
-            cv::Size(2 * SUBTRACT_ELEM_SIZE + 1, 2 * SUBTRACT_ELEM_SIZE + 1),
-            cv::Point(SUBTRACT_ELEM_SIZE, SUBTRACT_ELEM_SIZE)
-    );
-    dilate(imgGammaMask, imgGammaMask, element);
+    Operations::morphOpening(imgGammaMask, imgGammaMask, SUBTRACT_ELEM_SIZE, false);
     if (DEBUG) imshow("Threshold", imgGammaMask);
 
     // Count cell nuclei
@@ -118,7 +116,6 @@ int main() {
     waitKey(0);
     return 0;
 }
-
 
 Mat getImageWithNucleoidsAreas() {
     cv::Mat element;
@@ -171,6 +168,54 @@ void clampVariables() {
     if (STRUCT_ELEM_SIZE % 2 == 0 || STRUCT_ELEM_SIZE < 1) STRUCT_ELEM_SIZE++;
 }
 
+void assignNucleoidsToNuclei(vector<KeyPoint> nucleoidsPositions, vector<KeyPoint> nucleiPositions, Mat &imgPlaceholder) {
+    unsigned int nucleoidsWithNucleusCount = 0, minNucleoids = INT_MAX, maxNucleoids = 0;
+
+    // Assign nucleoids to its nucleus
+    for (vector<KeyPoint>::iterator nucleoid = nucleoidsPositions.begin(); nucleoid != nucleoidsPositions.end();) {
+        double shortestLine = DBL_MAX;
+        Point bestNucleusCenter = Point(-1, -1);
+
+        for (auto nucleus : nucleiPositions) {
+            if (pow((nucleoid->pt.x - nucleus.pt.x), 2) + pow((nucleoid->pt.y - nucleus.pt.y), 2) <
+                pow(nucleus.size * 1.75, 2)) {
+                if (norm(nucleus.pt - nucleoid->pt) < shortestLine) {
+                    bestNucleusCenter = nucleus.pt;
+                    shortestLine = norm(nucleus.pt - nucleoid->pt);
+                }
+            }
+            else {
+                if (norm(nucleus.pt - nucleoid->pt) < shortestLine && norm(nucleus.pt - nucleoid->pt) < 50) {
+                    bestNucleusCenter = nucleus.pt;
+                    shortestLine = norm(nucleus.pt - nucleoid->pt);
+                }
+            }
+        }
+
+        if (bestNucleusCenter.x != -1 && bestNucleusCenter.y != -1) {
+            line(imgPlaceholder, bestNucleusCenter, nucleoid->pt, Scalar(0, 255, 0), 1);
+            nucleoidsWithNucleusCount++;
+        }
+        ++nucleoid;
+    }
+
+    // Print nucleoids count to image
+    string label = to_string(nucleoidsWithNucleusCount) + " nucleoids";
+    putText(imgPlaceholder, label, cv::Point(150, 35), cv::QT_FONT_NORMAL, 0.75, CV_RGB(0, 204, 0), 1);
+
+    // Some statistics
+    double avgNucleoidsForCell = nucleoidsWithNucleusCount / (double) nucleiPositions.size();
+    label = to_string(avgNucleoidsForCell) + " avg(nucleoids/cell)";
+    putText(imgPlaceholder, label, cv::Point(150, 55), cv::QT_FONT_NORMAL, 0.75, CV_RGB(0, 204, 0), 1);
+
+    // Resize resulting image if it's too big for screen
+    if (imgPlaceholder.rows / 2 > 1024 || imgPlaceholder.cols / 2 > 800) {
+        resize(imgPlaceholder, imgPlaceholder, Size(imgPlaceholder.rows / 2, imgPlaceholder.cols / 2));
+    }
+
+    imwrite(WRITE_FILENAME, imgPlaceholder);
+}
+
 void findNucleoids(int, void *) {
     cv::Mat element;
 
@@ -178,8 +223,8 @@ void findNucleoids(int, void *) {
 
     if (DEBUG) {
         cout << "elem: " << STRUCT_ELEM_SIZE << ", median: " << MEDIAN_SIZE << endl;
-        cout << "threshold block size: " << ADAPTIVE_THRESHOLD_BLOCK_SIZE << ", ADAPTIVE_THRESHOLD_C: "
-             << ADAPTIVE_THRESHOLD_C << endl;
+        cout << "ADAPTIVE_THRESHOLD_BLOCK_SIZE: " << ADAPTIVE_THRESHOLD_BLOCK_SIZE
+             << ", ADAPTIVE_THRESHOLD_C: " << ADAPTIVE_THRESHOLD_C << endl;
     }
 
     Mat imgWithNucleoidsAreas = getImageWithNucleoidsAreas();
@@ -202,44 +247,17 @@ void findNucleoids(int, void *) {
     if (min != max) {
         imgDTResult.convertTo(imgDTResult, CV_8U, 255.0 / (max - min), -255.0 * min / (max - min));
     }
-    medianBlur(imgDTResult, imgDTResult, 1);
+    medianBlur(imgDTResult, imgDTResult, 3);
     if (DEBUG) {
         imshow("DT of binarized imgWithNucleoidsAreas", imgDTResult);
         findNucleoidBlobs(imgDTResult, imgDTResult, imgPlaceholder, true);
     }
 
-    nucleoidsPositions = findNucleoidBlobs(imgDTResult, imgOriginal, imgPlaceholder, false);
+    // Find nucleoids blobs
+    nucleoidsPositions = findNucleoidBlobs(imgDTResult, imgOriginalClone, imgPlaceholder, false);
 
-    // Assign nucleoids to nuclei -- TODO: extract this part to separate function
-    unsigned int nucleoidsWithNucleusCount = 0;
-    for (vector<KeyPoint>::iterator nucleoid = nucleoidsPositions.begin(); nucleoid != nucleoidsPositions.end();) {
-        double shortestLine = DBL_MAX;
-        Point bestNucleusCenter = Point(-1, -1);
-
-        for (auto nucleus : nucleiPositions) {
-            if (pow((nucleoid->pt.x - nucleus.pt.x), 2) + pow((nucleoid->pt.y - nucleus.pt.y), 2) <
-                pow(nucleus.size * 1.5, 2)) {
-                if (norm(nucleus.pt - nucleoid->pt) < shortestLine) {
-                    bestNucleusCenter = nucleus.pt;
-                    shortestLine = norm(nucleus.pt - nucleoid->pt);
-                }
-            }
-        }
-
-        if (bestNucleusCenter.x != -1 && bestNucleusCenter.y != -1) {
-            line(imgPlaceholder, bestNucleusCenter, nucleoid->pt, Scalar(0, 255, 0), 1);
-            nucleoidsWithNucleusCount++;
-        }
-        ++nucleoid;
-    }
-
-    string label = to_string(nucleoidsWithNucleusCount) + " nucleoids found";
-    putText(imgPlaceholder, label, cv::Point(imgPlaceholder.cols / 2, 50), cv::QT_FONT_NORMAL, 1.0,
-            CV_RGB(0, 204, 0), 1);
-    if (imgPlaceholder.rows / 2 > 1024 || imgPlaceholder.cols / 2 > 800) {
-        resize(imgPlaceholder, imgPlaceholder, Size(imgPlaceholder.rows / 2, imgPlaceholder.cols / 2));
-    }
-    imwrite(WRITE_FILENAME, imgPlaceholder);
+    // Asign nucleoids to nuclei
+    assignNucleoidsToNuclei(nucleoidsPositions, nucleiPositions, imgPlaceholder);
 
     imshow("Result", imgPlaceholder);
 }

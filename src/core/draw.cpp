@@ -16,6 +16,7 @@ namespace Draw {
 
     cv::Mat drawAndFilterContours(cv::Mat imgOriginal, cv::Mat imgThreshold, int thresholdValue, int filterType,
                                double filterMultiplier) {
+        // First version of nuclei segmentation, didn't work properly
         Mat canny_output;
         Mat imgOriginalContours;
         vector<vector<Point> > contours;

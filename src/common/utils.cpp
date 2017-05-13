@@ -19,6 +19,7 @@ namespace Utils {
     }
 
     double calculateVectorMedian(vector<double> values) {
+        // Metric for contour removing
         double median;
         size_t size = values.size();
 
@@ -33,6 +34,7 @@ namespace Utils {
     }
 
     double calculateVectorAverage(vector<double> values) {
+        // Metric for contour removing
         double average = 0;
 
         for (int i = 0; i < values.size(); i++) {
@@ -53,6 +55,8 @@ namespace Utils {
 
     vector<vector<Point>>
     filterContours(vector<vector<Point>> contours, double (*metricFunction)(vector<double>), double multiplier) {
+        // User to filter too big contours
+
         vector<double> contourAreas = getContourAreas(contours);
         vector<vector<Point>> filteredContours;
         double minAreaSize = metricFunction(contourAreas);

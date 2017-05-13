@@ -22,7 +22,7 @@ namespace Operations {
         }
     }
 
-    void morphClosing(cv::Mat &imgSrc, cv::Mat &imgDst, int erosion_size, bool showImg) {
+    void morphOpening(cv::Mat &imgSrc, cv::Mat &imgDst, int erosion_size, bool showImg) {
         // Erosion + dilatation.
         cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE,
                                                     cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1),
@@ -35,6 +35,7 @@ namespace Operations {
     }
 
     void gammaCorrection(cv::Mat &imgSrc, cv::Mat &imgDst, float fGamma, bool showImg) {
+        // Source: OpenCV examples
         unsigned char lut[256];
 
         for (int i = 0; i < 256; i++) {
